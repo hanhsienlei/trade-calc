@@ -1,18 +1,18 @@
 import { useState, useCallback, useMemo } from "react";
 import "./TradeCalc.css";
 
-const RISK_OPTIONS = [0.25, 0.5, 1, 1.5, 2, 3];
+const RISK_OPTIONS = [0.5, 1, 2, 3, 5, 10];
 
 const DEFAULT_STATE = {
-  account: 130242,
-  risk: 2,
-  entry: "",
-  sl: "",
+  account: 0,
+  risk: 0,
+  entry: 0,
+  sl: 0,
   entryType: "M",
   posActShares: "",
   targets: [
-    { price: "", pct: "", type: "M" },
-    { price: "", pct: "", type: "M" },
+    { price: null, pct: null, type: "L" },
+    { price: null, pct: null, type: "L" },
   ],
   marketRate: 0.02,
   limitRate: 0.015,
@@ -26,18 +26,26 @@ function n(v) {
 function fmtMoney(v, decimals = 2) {
   if (v == null || !isFinite(v)) return "—";
   const sign = v < 0 ? "-" : "";
-  return sign + "$" + Math.abs(v).toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+  return (
+    sign +
+    "$" +
+    Math.abs(v).toLocaleString("en-US", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    })
+  );
 }
 
 function fmtPlusMoney(v) {
   if (v == null || !isFinite(v)) return "—";
   const sign = v >= 0 ? "+" : "−";
-  return sign + "$" + Math.abs(v).toLocaleString("en-US", {
-    maximumFractionDigits: 0,
-  });
+  return (
+    sign +
+    "$" +
+    Math.abs(v).toLocaleString("en-US", {
+      maximumFractionDigits: 0,
+    })
+  );
 }
 
 function fmtPct(v, decimals = 2) {
@@ -78,9 +86,16 @@ function compute(state) {
   const calcShares = isFinite(riskAmt / slDiff) ? riskAmt / slDiff : 0;
   const actShares = isFinite(PA) && PA > 0 ? PA : null;
 
-  const firstTarget = targets.find((t) => isFinite(n(t.price)) && n(t.price) > 0);
+  const firstTarget = targets.find(
+    (t) => isFinite(n(t.price)) && n(t.price) > 0,
+  );
   const t1Price = firstTarget ? n(firstTarget.price) : null;
-  const t1Diff = t1Price != null ? (direction === "short" ? E - t1Price : t1Price - E) : null;
+  const t1Diff =
+    t1Price != null
+      ? direction === "short"
+        ? E - t1Price
+        : t1Price - E
+      : null;
 
   const buildTargetData = (shares) =>
     targets.map((t) => {
@@ -88,14 +103,20 @@ function compute(state) {
       const pctRaw = n(t.pct);
       const pct = isFinite(pctRaw) ? pctRaw / 100 : NaN;
       if (!isFinite(TP) || TP <= 0 || !isFinite(pct) || pct <= 0 || !shares) {
-        return { sliceShares: null, exitFee: null, gross: null, net: null };
+        return {
+          sliceShares: null,
+          exitFee: null,
+          gross: null,
+          net: null,
+          priceDiff: null,
+        };
       }
       const sliceShares = shares * pct;
       const exitFee = sliceShares * TP * rateOf(t.type);
       const priceDiff = direction === "short" ? E - TP : TP - E;
       const gross = sliceShares * priceDiff;
       const net = gross - exitFee;
-      return { sliceShares, exitFee, gross, net };
+      return { sliceShares, exitFee, gross, net, priceDiff };
     });
 
   const computeFor = (shares) => {
@@ -112,8 +133,10 @@ function compute(state) {
     const breakEven = direction === "short" ? E - beOffset : E + beOffset;
     const potentialProfit = t1Diff != null ? shares * t1Diff : null;
     const profitPct = positionValue > 0 ? expectedProfit / account : null;
-
-    const rr = potentialProfit != null && riskDollar > 0 ? potentialProfit / riskDollar : null;
+    const rr =
+      direction === "long"
+        ? (Math.min(...tdata.map((x) => x.priceDiff || 0))) / (E - S)
+        : (Math.max(...tdata.map((x) => x.priceDiff || 0))) / (S - E);
 
     return {
       shares,
@@ -186,7 +209,6 @@ function NumberInput({ value, onChange, placeholder, step = "any" }) {
 function MiniCard({ kind, shares, fee, profit }) {
   return (
     <div className="mini-card">
-      <div className="mini-icon" aria-hidden>⌇</div>
       <div className="mini-title">
         {kind} — {shares != null ? fmtInt(shares) : "—"} sh
       </div>
@@ -196,7 +218,9 @@ function MiniCard({ kind, shares, fee, profit }) {
       </div>
       <div className="mini-row">
         <span>Profit</span>
-        <span className={`mini-val ${profit != null && profit >= 0 ? "pos" : "neg"}`}>
+        <span
+          className={`mini-val ${profit != null && profit >= 0 ? "pos" : "neg"}`}
+        >
           {profit != null ? fmtPlusMoney(profit) : "—"}
         </span>
       </div>
@@ -204,13 +228,23 @@ function MiniCard({ kind, shares, fee, profit }) {
   );
 }
 
-function TargetBlock({ idx, target, onChange, onRemove, removable, actData, calcData }) {
+function TargetBlock({
+  idx,
+  target,
+  onChange,
+  onRemove,
+  removable,
+  actData,
+  calcData,
+}) {
   return (
     <div className="target-block">
       <div className="target-head">
         <span className="target-tag">T{idx + 1}</span>
         {removable && (
-          <button className="target-remove" type="button" onClick={onRemove}>×</button>
+          <button className="target-remove" type="button" onClick={onRemove}>
+            ×
+          </button>
         )}
       </div>
       <div className="target-grid">
@@ -225,7 +259,7 @@ function TargetBlock({ idx, target, onChange, onRemove, removable, actData, calc
           <NumberInput
             value={target.pct}
             onChange={(v) => onChange("pct", v)}
-            placeholder="50"
+            placeholder="10"
           />
         </Field>
         <Field label="Type">
@@ -270,13 +304,18 @@ export default function TradeCalc() {
   const setTarget = useCallback((idx, field, val) => {
     setS((p) => ({
       ...p,
-      targets: p.targets.map((t, i) => (i === idx ? { ...t, [field]: val } : t)),
+      targets: p.targets.map((t, i) =>
+        i === idx ? { ...t, [field]: val } : t,
+      ),
     }));
   }, []);
 
   const addTarget = () => {
     if (s.targets.length >= 5) return;
-    setS((p) => ({ ...p, targets: [...p.targets, { price: "", pct: "", type: "M" }] }));
+    setS((p) => ({
+      ...p,
+      targets: [...p.targets, { price: "", pct: "", type: "M" }],
+    }));
   };
 
   const removeTarget = (idx) => {
@@ -307,7 +346,9 @@ export default function TradeCalc() {
               onChange={(e) => set("risk", parseFloat(e.target.value))}
             >
               {RISK_OPTIONS.map((r) => (
-                <option key={r} value={r}>{r}%</option>
+                <option key={r} value={r}>
+                  {r}%
+                </option>
               ))}
             </select>
           </Field>
@@ -319,13 +360,24 @@ export default function TradeCalc() {
         <div className="step-title">TRADE SETUP</div>
         <div className="row-3">
           <Field label="Entry price">
-            <NumberInput value={s.entry} onChange={(v) => set("entry", v)} placeholder="0.00" />
+            <NumberInput
+              value={s.entry}
+              onChange={(v) => set("entry", v)}
+              placeholder="0.00"
+            />
           </Field>
           <Field label="Stop loss">
-            <NumberInput value={s.sl} onChange={(v) => set("sl", v)} placeholder="0.00" />
+            <NumberInput
+              value={s.sl}
+              onChange={(v) => set("sl", v)}
+              placeholder="0.00"
+            />
           </Field>
           <Field label="Entry">
-            <MLToggle value={s.entryType} onChange={(v) => set("entryType", v)} />
+            <MLToggle
+              value={s.entryType}
+              onChange={(v) => set("entryType", v)}
+            />
           </Field>
         </div>
       </div>
@@ -360,43 +412,94 @@ export default function TradeCalc() {
           onChange={(v) => set("posActShares", v)}
           placeholder="0"
         />
-        <div className="hint">Dial in after targets — compare with calculated below</div>
+        <div className="hint">
+          Dial in after targets — compare with calculated below
+        </div>
       </div>
 
       <div className="card">
         <div className="compare-head">
           <span className="step-title">COMPARISON</span>
           {directionLabel && (
-            <span className={`badge badge-${result.direction}`}>{directionLabel}</span>
+            <span className={`badge badge-${result.direction}`}>
+              {directionLabel}
+            </span>
           )}
         </div>
         <table className="compare-table">
           <thead>
             <tr>
               <th></th>
-              <th><span className="col-pill">Actual</span></th>
-              <th><span className="col-pill">Calculated</span></th>
+              <th>
+                <span className="col-pill">Actual</span>
+              </th>
+              <th>
+                <span className="col-pill">Calculated</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             <CompareRow
               label="R:R"
-              act={result.act?.rr != null ? `1 : ${result.act.rr.toFixed(2)}` : "—"}
-              calc={result.calc?.rr != null ? `1 : ${result.calc.rr.toFixed(2)}` : "—"}
+              act={result.act?.rr != null ? `${result.act.rr.toFixed(2)}` : "—"}
+              calc={
+                result.calc?.rr != null ? `${result.calc.rr.toFixed(2)}` : "—"
+              }
             />
-            <CompareRow label="Risk $" act={fmtMoney(result.act?.riskDollar)} calc={fmtMoney(result.calc?.riskDollar)} />
-            <CompareRow label="Risk %" act={fmtPct(result.act?.riskPct)} calc={fmtPct(result.calc?.riskPct)} />
-            <CompareRow label="Entry fee" act={fmtMoney(result.act?.entryFee)} calc={fmtMoney(result.calc?.entryFee)} />
-            <CompareRow label="Exit fees" act={fmtMoney(result.act?.totalExitFees)} calc={fmtMoney(result.calc?.totalExitFees)} />
-            <CompareRow label="Break even" act={fmtPrice(result.act?.breakEven)} calc={fmtPrice(result.calc?.breakEven)} />
-            <CompareRow label="Potential profit" act={fmtMoney(result.act?.potentialProfit)} calc={fmtMoney(result.calc?.potentialProfit)} group />
-            <CompareRow label="Expected profit" act={fmtMoney(result.act?.expectedProfit)} calc={fmtMoney(result.calc?.expectedProfit)} highlight />
-            <CompareRow label="Profit %" act={fmtPct(result.act?.profitPct)} calc={fmtPct(result.calc?.profitPct)} />
-            <CompareRow label="Position value" act={fmtMoney(result.act?.positionValue)} calc={fmtMoney(result.calc?.positionValue)} group />
+            <CompareRow
+              label="Risk $"
+              act={fmtMoney(result.act?.riskDollar)}
+              calc={fmtMoney(result.calc?.riskDollar)}
+            />
+            <CompareRow
+              label="Risk %"
+              act={fmtPct(result.act?.riskPct)}
+              calc={fmtPct(result.calc?.riskPct)}
+            />
+            <CompareRow
+              label="Entry fee"
+              act={fmtMoney(result.act?.entryFee)}
+              calc={fmtMoney(result.calc?.entryFee)}
+            />
+            <CompareRow
+              label="Exit fees"
+              act={fmtMoney(result.act?.totalExitFees)}
+              calc={fmtMoney(result.calc?.totalExitFees)}
+            />
+            <CompareRow
+              label="Break even"
+              act={fmtPrice(result.act?.breakEven)}
+              calc={fmtPrice(result.calc?.breakEven)}
+            />
+            <CompareRow
+              label="Potential profit"
+              act={fmtMoney(result.act?.potentialProfit)}
+              calc={fmtMoney(result.calc?.potentialProfit)}
+              group
+            />
+            <CompareRow
+              label="Expected profit"
+              act={fmtMoney(result.act?.expectedProfit)}
+              calc={fmtMoney(result.calc?.expectedProfit)}
+              highlight
+            />
+            <CompareRow
+              label="Profit %"
+              act={fmtPct(result.act?.profitPct)}
+              calc={fmtPct(result.calc?.profitPct)}
+            />
+            <CompareRow
+              label="Position value"
+              act={fmtMoney(result.act?.positionValue)}
+              calc={fmtMoney(result.calc?.positionValue)}
+              group
+            />
             <CompareRow
               label="Shares"
               act={result.act?.shares != null ? fmtInt(result.act.shares) : "—"}
-              calc={result.calc?.shares != null ? fmtInt(result.calc.shares) : "—"}
+              calc={
+                result.calc?.shares != null ? fmtInt(result.calc.shares) : "—"
+              }
             />
           </tbody>
         </table>
@@ -405,7 +508,11 @@ export default function TradeCalc() {
       <div className="card">
         <div className="step-title">SETTINGS</div>
         <div className="settings-row">
-          <div className="settings-label">Market<br />rate</div>
+          <div className="settings-label">
+            Market
+            <br />
+            rate
+          </div>
           <div className="rate-input">
             <NumberInput
               value={s.marketRate}
@@ -417,7 +524,11 @@ export default function TradeCalc() {
           </div>
         </div>
         <div className="settings-row">
-          <div className="settings-label">Limit<br />rate</div>
+          <div className="settings-label">
+            Limit
+            <br />
+            rate
+          </div>
           <div className="rate-input">
             <NumberInput
               value={s.limitRate}
