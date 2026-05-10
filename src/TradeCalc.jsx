@@ -14,8 +14,8 @@ const DEFAULT_STATE = {
     { price: "", pct: "", type: "M" },
     { price: "", pct: "", type: "M" },
   ],
-  marketRate: 0.0002,
-  limitRate: 0.00015,
+  marketRate: 0.02,
+  limitRate: 0.015,
 };
 
 function n(v) {
@@ -71,9 +71,9 @@ function compute(state) {
   const slDiff = Math.abs(E - S);
   const riskAmt = (account * risk) / 100;
 
-  const rateOf = (t) => (t === "L" ? limitRate : marketRate);
+  const rateOf = (t) => (t === "L" ? limitRate : marketRate) / 100;
   const entryRate = rateOf(entryType);
-  const stopRate = marketRate;
+  const stopRate = marketRate / 100;
 
   const calcShares = isFinite(riskAmt / slDiff) ? riskAmt / slDiff : 0;
   const actShares = isFinite(PA) && PA > 0 ? PA : null;
@@ -81,12 +81,12 @@ function compute(state) {
   const firstTarget = targets.find((t) => isFinite(n(t.price)) && n(t.price) > 0);
   const t1Price = firstTarget ? n(firstTarget.price) : null;
   const t1Diff = t1Price != null ? (direction === "short" ? E - t1Price : t1Price - E) : null;
-  const rr = t1Diff != null && slDiff > 0 ? t1Diff / slDiff : null;
 
   const buildTargetData = (shares) =>
     targets.map((t) => {
       const TP = n(t.price);
-      const pct = n(t.pct);
+      const pctRaw = n(t.pct);
+      const pct = isFinite(pctRaw) ? pctRaw / 100 : NaN;
       if (!isFinite(TP) || TP <= 0 || !isFinite(pct) || pct <= 0 || !shares) {
         return { sliceShares: null, exitFee: null, gross: null, net: null };
       }
@@ -114,6 +114,8 @@ function compute(state) {
     const expectedProfit = totalSliceNet - entryFee;
     const profitPct = positionValue > 0 ? expectedProfit / positionValue : null;
 
+    const rr = potentialProfit != null && riskDollar > 0 ? potentialProfit / riskDollar : null;
+
     return {
       shares,
       positionValue,
@@ -126,6 +128,7 @@ function compute(state) {
       potentialProfit,
       expectedProfit,
       profitPct,
+      rr,
       tdata,
     };
   };
@@ -134,7 +137,6 @@ function compute(state) {
     ready: true,
     direction,
     riskAmt,
-    rr,
     calc: computeFor(calcShares),
     act: computeFor(actShares),
     calcShares,
@@ -182,7 +184,7 @@ function NumberInput({ value, onChange, placeholder, step = "any" }) {
   );
 }
 
-function MiniCard({ kind, shares, fee, net }) {
+function MiniCard({ kind, shares, fee, profit }) {
   return (
     <div className="mini-card">
       <div className="mini-icon" aria-hidden>⌇</div>
@@ -194,9 +196,9 @@ function MiniCard({ kind, shares, fee, net }) {
         <span className="mini-val">{fmtMoney(fee)}</span>
       </div>
       <div className="mini-row">
-        <span>Net profit</span>
-        <span className={`mini-val ${net != null && net >= 0 ? "pos" : "neg"}`}>
-          {net != null ? fmtPlusMoney(net) : "—"}
+        <span>Profit</span>
+        <span className={`mini-val ${profit != null && profit >= 0 ? "pos" : "neg"}`}>
+          {profit != null ? fmtPlusMoney(profit) : "—"}
         </span>
       </div>
     </div>
@@ -224,7 +226,7 @@ function TargetBlock({ idx, target, onChange, onRemove, removable, actData, calc
           <NumberInput
             value={target.pct}
             onChange={(v) => onChange("pct", v)}
-            placeholder="0.5"
+            placeholder="50"
           />
         </Field>
         <Field label="Type">
@@ -236,13 +238,13 @@ function TargetBlock({ idx, target, onChange, onRemove, removable, actData, calc
           kind="Actual"
           shares={actData?.sliceShares}
           fee={actData?.exitFee}
-          net={actData?.net}
+          profit={actData?.gross}
         />
         <MiniCard
           kind="Calc"
           shares={calcData?.sliceShares}
           fee={calcData?.exitFee}
-          net={calcData?.net}
+          profit={calcData?.gross}
         />
       </div>
     </div>
@@ -378,12 +380,11 @@ export default function TradeCalc() {
             </tr>
           </thead>
           <tbody>
-            <tr className="rr-row">
-              <th>R:R</th>
-              <td colSpan={2}>
-                {result.rr != null ? `1 : ${result.rr.toFixed(2)}` : "—"}
-              </td>
-            </tr>
+            <CompareRow
+              label="R:R"
+              act={result.act?.rr != null ? `1 : ${result.act.rr.toFixed(2)}` : "—"}
+              calc={result.calc?.rr != null ? `1 : ${result.calc.rr.toFixed(2)}` : "—"}
+            />
             <CompareRow label="Risk $" act={fmtMoney(result.act?.riskDollar)} calc={fmtMoney(result.calc?.riskDollar)} />
             <CompareRow label="Risk %" act={fmtPct(result.act?.riskPct)} calc={fmtPct(result.calc?.riskPct)} />
             <CompareRow label="Entry fee" act={fmtMoney(result.act?.entryFee)} calc={fmtMoney(result.calc?.entryFee)} />
@@ -406,21 +407,27 @@ export default function TradeCalc() {
         <div className="step-title">SETTINGS</div>
         <div className="settings-row">
           <div className="settings-label">Market<br />rate</div>
-          <NumberInput
-            value={s.marketRate}
-            onChange={(v) => set("marketRate", parseFloat(v) || 0)}
-            placeholder="0.0002"
-            step="0.00001"
-          />
+          <div className="rate-input">
+            <NumberInput
+              value={s.marketRate}
+              onChange={(v) => set("marketRate", parseFloat(v) || 0)}
+              placeholder="0.02"
+              step="0.001"
+            />
+            <span className="rate-suffix">%</span>
+          </div>
         </div>
         <div className="settings-row">
           <div className="settings-label">Limit<br />rate</div>
-          <NumberInput
-            value={s.limitRate}
-            onChange={(v) => set("limitRate", parseFloat(v) || 0)}
-            placeholder="0.00015"
-            step="0.00001"
-          />
+          <div className="rate-input">
+            <NumberInput
+              value={s.limitRate}
+              onChange={(v) => set("limitRate", parseFloat(v) || 0)}
+              placeholder="0.015"
+              step="0.001"
+            />
+            <span className="rate-suffix">%</span>
+          </div>
         </div>
       </div>
     </div>
