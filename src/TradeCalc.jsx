@@ -104,14 +104,13 @@ function compute(state) {
     const entryFee = positionValue * entryRate;
     const tdata = buildTargetData(shares);
     const totalExitFees = tdata.reduce((s, x) => s + (x.exitFee || 0), 0);
-    const totalSliceNet = tdata.reduce((s, x) => s + (x.net || 0), 0);
+    const expectedProfit = tdata.reduce((s, x) => s + (x.net || 0), 0);
     const stopExitFee = shares * S * stopRate;
     const riskDollar = slDiff * shares + entryFee + stopExitFee;
     const riskPct = riskDollar / account;
     const beOffset = (entryFee + totalExitFees) / shares;
     const breakEven = direction === "short" ? E - beOffset : E + beOffset;
     const potentialProfit = t1Diff != null ? shares * t1Diff : null;
-    const expectedProfit = totalSliceNet - entryFee;
     const profitPct = positionValue > 0 ? expectedProfit / positionValue : null;
 
     const rr = potentialProfit != null && riskDollar > 0 ? potentialProfit / riskDollar : null;
