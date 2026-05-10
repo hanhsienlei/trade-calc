@@ -445,6 +445,25 @@ input[type=number] {
   pointer-events: none;
 }
 
+.reset-btn {
+  margin-top: 16px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 11px;
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.reset-btn:hover {
+  border-color: var(--short-fg);
+  color: var(--short-fg);
+}
+
 /* scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg); }

@@ -1,7 +1,8 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import "./TradeCalc.css";
 
 const RISK_OPTIONS = [0.5, 1, 2, 3, 5, 10];
+const STORAGE_KEY = "tradecalc.state.v1";
 
 const DEFAULT_STATE = {
   account: 0,
@@ -17,6 +18,16 @@ const DEFAULT_STATE = {
   marketRate: 0.02,
   limitRate: 0.015,
 };
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_STATE;
+    return { ...DEFAULT_STATE, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_STATE;
+  }
+}
 
 function n(v) {
   const x = parseFloat(v);
@@ -135,8 +146,8 @@ function compute(state) {
     const profitPct = positionValue > 0 ? expectedProfit / account : null;
     const rr =
       direction === "long"
-        ? (Math.min(...tdata.map((x) => x.priceDiff || 0))) / (E - S)
-        : (Math.max(...tdata.map((x) => x.priceDiff || 0))) / (S - E);
+        ? Math.min(...tdata.map((x) => x.priceDiff || 0)) / (E - S)
+        : Math.max(...tdata.map((x) => x.priceDiff || 0)) / (S - E);
 
     return {
       shares,
@@ -295,8 +306,15 @@ function CompareRow({ label, act, calc, highlight, group }) {
 }
 
 export default function TradeCalc() {
-  const [s, setS] = useState(DEFAULT_STATE);
+  const [s, setS] = useState(loadState);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+    } catch {
+      /* quota / private mode — ignore */
+    }
+  }, [s]);
   const set = useCallback((key, val) => {
     setS((p) => ({ ...p, [key]: val }));
   }, []);
@@ -320,6 +338,21 @@ export default function TradeCalc() {
 
   const removeTarget = (idx) => {
     setS((p) => ({ ...p, targets: p.targets.filter((_, i) => i !== idx) }));
+  };
+
+  const resetAll = () => {
+    if (
+      !window.confirm(
+        "Reset all fields to defaults? This will clear saved data.",
+      )
+    )
+      return;
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+    setS(DEFAULT_STATE);
   };
 
   const result = useMemo(() => compute(s), [s]);
@@ -539,6 +572,9 @@ export default function TradeCalc() {
             <span className="rate-suffix">%</span>
           </div>
         </div>
+        <button type="button" className="reset-btn" onClick={resetAll}>
+          Reset all fields
+        </button>
       </div>
     </div>
   );
