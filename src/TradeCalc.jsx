@@ -1,236 +1,261 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import "./TradeCalc.css";
 
+const RISK_OPTIONS = [0.25, 0.5, 1, 1.5, 2, 3];
+
 const DEFAULT_STATE = {
-  account: 10000,
+  account: 130242,
+  risk: 2,
   entry: "",
   sl: "",
-  posAct: "",
-  mrate: 0.0006,
-  lrate: 0.0012,
-  risk: 1,
-  etype: "long",
+  entryType: "M",
+  posActShares: "",
   targets: [
-    { price: "", size: 100, type: "%" },
-    { price: "", size: 100, type: "%" },
+    { price: "", pct: "", type: "M" },
+    { price: "", pct: "", type: "M" },
   ],
+  marketRate: 0.0002,
+  limitRate: 0.00015,
 };
 
-function fmt(v, decimals = 2) {
-  if (v == null || isNaN(v) || !isFinite(v)) return "—";
-  return v.toFixed(decimals);
+function n(v) {
+  const x = parseFloat(v);
+  return isFinite(x) ? x : NaN;
 }
 
-function fmtDollar(v) {
-  if (v == null || isNaN(v) || !isFinite(v)) return "—";
-  return "$" + Math.abs(v).toFixed(2);
+function fmtMoney(v, decimals = 2) {
+  if (v == null || !isFinite(v)) return "—";
+  const sign = v < 0 ? "-" : "";
+  return sign + "$" + Math.abs(v).toLocaleString("en-US", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 }
 
-function calcTarget(state, tgt) {
-  const { account, entry, sl, posAct, mrate, lrate, risk, etype } = state;
-  const e = parseFloat(entry);
-  const s = parseFloat(sl);
-  const pa = parseFloat(posAct);
-  const tp = parseFloat(tgt.price);
-  if (!e || !s || isNaN(e) || isNaN(s)) return null;
+function fmtPlusMoney(v) {
+  if (v == null || !isFinite(v)) return "—";
+  const sign = v >= 0 ? "+" : "−";
+  return sign + "$" + Math.abs(v).toLocaleString("en-US", {
+    maximumFractionDigits: 0,
+  });
+}
 
-  const riskAmt = (account * risk) / 100;
-  const slPct = Math.abs(e - s) / e;
+function fmtPct(v, decimals = 2) {
+  if (v == null || !isFinite(v)) return "—";
+  return (v * 100).toFixed(decimals) + "%";
+}
 
-  // Calculated position size from risk
-  const entryFeeRate = mrate;
-  const exitFeeRate = lrate;
-  const calcShares = riskAmt / (Math.abs(e - s) + e * entryFeeRate + s * exitFeeRate);
-  const calcSize = calcShares * e;
+function fmtInt(v) {
+  if (v == null || !isFinite(v)) return "—";
+  return Math.round(v).toLocaleString("en-US");
+}
 
-  // Actual position (user-entered)
-  const actShares = pa ? pa / e : null;
-  const actSize = pa || null;
+function fmtPrice(v) {
+  if (v == null || !isFinite(v)) return "—";
+  return "$" + v.toFixed(2);
+}
 
-  const shares = actShares ?? calcShares;
-  const size = actSize ?? calcSize;
+function compute(state) {
+  const E = n(state.entry);
+  const S = n(state.sl);
+  const PA = n(state.posActShares);
+  const account = n(state.account);
+  const risk = n(state.risk);
+  const { marketRate, limitRate, entryType, targets } = state;
 
-  // Fees
-  const entryFee = size * entryFeeRate;
-  const exitFee = size * exitFeeRate;
-
-  // Risk
-  const riskDollar = Math.abs(e - s) * shares + entryFee + exitFee;
-  const riskPct = riskDollar / account;
-
-  // Break even
-  const breakEven =
-    etype === "long"
-      ? e + (entryFee + exitFee) / shares
-      : e - (entryFee + exitFee) / shares;
-
-  if (!tp || isNaN(tp)) {
-    return { entryFee, exitFee, riskDollar, riskPct, breakEven, calcSize, calcShares, actSize, actShares, shares, size };
+  if (!isFinite(E) || !isFinite(S) || E <= 0 || S <= 0 || E === S) {
+    return { ready: false };
   }
 
-  // Target exit
-  const targetExitFee = size * exitFeeRate;
-  const priceDiff = etype === "long" ? tp - e : e - tp;
-  const potentialProfit = priceDiff * shares;
-  const expectedProfit = potentialProfit - entryFee - targetExitFee;
-  const profitPct = expectedProfit / size;
-  const slPriceDiff = etype === "long" ? e - s : s - e;
-  const rr = slPriceDiff > 0 ? priceDiff / slPriceDiff : null;
+  const direction = S > E ? "short" : "long";
+  const slDiff = Math.abs(E - S);
+  const riskAmt = (account * risk) / 100;
 
-  return { entryFee, exitFee, riskDollar, riskPct, breakEven, potentialProfit, expectedProfit, profitPct, rr, calcSize, calcShares, actSize, actShares, shares, size };
+  const rateOf = (t) => (t === "L" ? limitRate : marketRate);
+  const entryRate = rateOf(entryType);
+  const stopRate = marketRate;
+
+  const calcShares = isFinite(riskAmt / slDiff) ? riskAmt / slDiff : 0;
+  const actShares = isFinite(PA) && PA > 0 ? PA : null;
+
+  const firstTarget = targets.find((t) => isFinite(n(t.price)) && n(t.price) > 0);
+  const t1Price = firstTarget ? n(firstTarget.price) : null;
+  const t1Diff = t1Price != null ? (direction === "short" ? E - t1Price : t1Price - E) : null;
+  const rr = t1Diff != null && slDiff > 0 ? t1Diff / slDiff : null;
+
+  const buildTargetData = (shares) =>
+    targets.map((t) => {
+      const TP = n(t.price);
+      const pct = n(t.pct);
+      if (!isFinite(TP) || TP <= 0 || !isFinite(pct) || pct <= 0 || !shares) {
+        return { sliceShares: null, exitFee: null, gross: null, net: null };
+      }
+      const sliceShares = shares * pct;
+      const exitFee = sliceShares * TP * rateOf(t.type);
+      const priceDiff = direction === "short" ? E - TP : TP - E;
+      const gross = sliceShares * priceDiff;
+      const net = gross - exitFee;
+      return { sliceShares, exitFee, gross, net };
+    });
+
+  const computeFor = (shares) => {
+    if (!shares || shares <= 0) return null;
+    const positionValue = shares * E;
+    const entryFee = positionValue * entryRate;
+    const tdata = buildTargetData(shares);
+    const totalExitFees = tdata.reduce((s, x) => s + (x.exitFee || 0), 0);
+    const totalSliceNet = tdata.reduce((s, x) => s + (x.net || 0), 0);
+    const stopExitFee = shares * S * stopRate;
+    const riskDollar = slDiff * shares + entryFee + stopExitFee;
+    const riskPct = riskDollar / account;
+    const beOffset = (entryFee + totalExitFees) / shares;
+    const breakEven = direction === "short" ? E - beOffset : E + beOffset;
+    const potentialProfit = t1Diff != null ? shares * t1Diff : null;
+    const expectedProfit = totalSliceNet - entryFee;
+    const profitPct = positionValue > 0 ? expectedProfit / positionValue : null;
+
+    return {
+      shares,
+      positionValue,
+      entryFee,
+      totalExitFees,
+      stopExitFee,
+      riskDollar,
+      riskPct,
+      breakEven,
+      potentialProfit,
+      expectedProfit,
+      profitPct,
+      tdata,
+    };
+  };
+
+  return {
+    ready: true,
+    direction,
+    riskAmt,
+    rr,
+    calc: computeFor(calcShares),
+    act: computeFor(actShares),
+    calcShares,
+    actShares,
+  };
 }
 
-function NumInput({ label, value, onChange, prefix, suffix, step = "any", className = "" }) {
+function MLToggle({ value, onChange }) {
   return (
-    <div className={`num-input-wrap ${className}`}>
-      {label && <label>{label}</label>}
-      <div className="num-input-inner">
-        {prefix && <span className="num-affix">{prefix}</span>}
-        <input
-          type="number"
-          inputMode="decimal"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          step={step}
-          placeholder="0"
-        />
-        {suffix && <span className="num-affix">{suffix}</span>}
-      </div>
-    </div>
-  );
-}
-
-function Pill({ options, value, onChange }) {
-  return (
-    <div className="pill">
-      {options.map((o) => (
+    <div className="ml-toggle">
+      {["M", "L"].map((v) => (
         <button
-          key={o.value}
-          className={value === o.value ? "active" : ""}
-          onClick={() => onChange(o.value)}
+          key={v}
           type="button"
+          className={value === v ? "active" : ""}
+          onClick={() => onChange(v)}
         >
-          {o.label}
+          {v}
         </button>
       ))}
     </div>
   );
 }
 
-function Row({ label, act, calc, highlight }) {
+function Field({ label, children }) {
   return (
-    <tr className={highlight ? "highlight" : ""}>
-      <td className="row-label">{label}</td>
-      <td className="row-act">{act ?? "—"}</td>
-      <td className="row-calc">{calc ?? "—"}</td>
-    </tr>
+    <div className="field">
+      <label>{label}</label>
+      {children}
+    </div>
   );
 }
 
-function TargetSection({ idx, tgt, onChange, onRemove, result, entry, sl, etype }) {
-  const handleField = (field) => (val) => onChange(idx, field, val);
-
-  const rr = result?.rr;
-
+function NumberInput({ value, onChange, placeholder, step = "any" }) {
   return (
-    <div className="target-card">
-      <div className="target-card-header">
-        <span className="target-label">Target {idx + 1}</span>
-        {idx > 0 && (
-          <button className="remove-btn" onClick={() => onRemove(idx)} type="button">
-            ✕
-          </button>
+    <input
+      className="num-input"
+      type="number"
+      inputMode="decimal"
+      value={value}
+      placeholder={placeholder}
+      step={step}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
+function MiniCard({ kind, shares, fee, net }) {
+  return (
+    <div className="mini-card">
+      <div className="mini-icon" aria-hidden>⌇</div>
+      <div className="mini-title">
+        {kind} — {shares != null ? fmtInt(shares) : "—"} sh
+      </div>
+      <div className="mini-row">
+        <span>Fee</span>
+        <span className="mini-val">{fmtMoney(fee)}</span>
+      </div>
+      <div className="mini-row">
+        <span>Net profit</span>
+        <span className={`mini-val ${net != null && net >= 0 ? "pos" : "neg"}`}>
+          {net != null ? fmtPlusMoney(net) : "—"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function TargetBlock({ idx, target, onChange, onRemove, removable, actData, calcData }) {
+  return (
+    <div className="target-block">
+      <div className="target-head">
+        <span className="target-tag">T{idx + 1}</span>
+        {removable && (
+          <button className="target-remove" type="button" onClick={onRemove}>×</button>
         )}
       </div>
-
-      <div className="target-inputs">
-        <NumInput
-          label="Exit Price"
-          prefix={etype === "long" ? "▲" : "▼"}
-          value={tgt.price}
-          onChange={handleField("price")}
-        />
-        <div className="num-input-wrap">
-          <label>Exit Size</label>
-          <div className="num-input-inner size-inner">
-            <input
-              type="number"
-              inputMode="decimal"
-              value={tgt.size}
-              onChange={(e) => handleField("size")(e.target.value)}
-              placeholder="100"
-              step="any"
-            />
-            <Pill
-              options={[
-                { label: "%", value: "%" },
-                { label: "$", value: "$" },
-              ]}
-              value={tgt.type}
-              onChange={handleField("type")}
-            />
-          </div>
-        </div>
+      <div className="target-grid">
+        <Field label="Price">
+          <NumberInput
+            value={target.price}
+            onChange={(v) => onChange("price", v)}
+            placeholder="0.00"
+          />
+        </Field>
+        <Field label="% of pos">
+          <NumberInput
+            value={target.pct}
+            onChange={(v) => onChange("pct", v)}
+            placeholder="0.5"
+          />
+        </Field>
+        <Field label="Type">
+          <MLToggle value={target.type} onChange={(v) => onChange("type", v)} />
+        </Field>
       </div>
-
-      {result && (
-        <table className="result-table">
-          <thead>
-            <tr>
-              <th></th>
-              <th>Actual</th>
-              <th>Calc</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rr != null && (
-              <tr className="rr-row">
-                <td className="row-label">R:R</td>
-                <td colSpan={2} className="rr-val">1 : {fmt(rr)}</td>
-              </tr>
-            )}
-            <Row label="Risk $" act={fmtDollar(result.riskDollar)} calc={fmtDollar(result.riskDollar)} />
-            <Row label="Risk %" act={`${fmt(result.riskPct * 100)}%`} calc={`${fmt(result.riskPct * 100)}%`} />
-            <Row label="Entry Fee" act={fmtDollar(result.entryFee)} calc={fmtDollar(result.entryFee)} />
-            <Row label="Exit Fees" act={fmtDollar(result.exitFee)} calc={fmtDollar(result.exitFee)} />
-            <Row label="Break Even" act={`$${fmt(result.breakEven)}`} calc={`$${fmt(result.breakEven)}`} />
-            {result.potentialProfit != null && (
-              <>
-                <Row
-                  label="Potential Profit"
-                  act={fmtDollar(result.potentialProfit)}
-                  calc={fmtDollar(result.potentialProfit)}
-                  highlight
-                />
-                <Row
-                  label="Expected Profit"
-                  act={fmtDollar(result.expectedProfit)}
-                  calc={fmtDollar(result.expectedProfit)}
-                  highlight
-                />
-                <Row
-                  label="Profit %"
-                  act={`${fmt(result.profitPct * 100)}%`}
-                  calc={`${fmt(result.profitPct * 100)}%`}
-                  highlight
-                />
-              </>
-            )}
-            <tr className="section-divider"><td colSpan={3}></td></tr>
-            <Row
-              label="Position $"
-              act={result.actSize != null ? fmtDollar(result.actSize) : "—"}
-              calc={fmtDollar(result.calcSize)}
-            />
-            <Row
-              label="Shares"
-              act={result.actShares != null ? fmt(result.actShares, 4) : "—"}
-              calc={fmt(result.calcShares, 4)}
-            />
-          </tbody>
-        </table>
-      )}
+      <div className="mini-cards">
+        <MiniCard
+          kind="Actual"
+          shares={actData?.sliceShares}
+          fee={actData?.exitFee}
+          net={actData?.net}
+        />
+        <MiniCard
+          kind="Calc"
+          shares={calcData?.sliceShares}
+          fee={calcData?.exitFee}
+          net={calcData?.net}
+        />
+      </div>
     </div>
+  );
+}
+
+function CompareRow({ label, act, calc, highlight, group }) {
+  return (
+    <tr className={`${highlight ? "row-hl" : ""} ${group ? "row-group" : ""}`}>
+      <th>{label}</th>
+      <td>{act}</td>
+      <td>{calc}</td>
+    </tr>
   );
 }
 
@@ -238,114 +263,166 @@ export default function TradeCalc() {
   const [s, setS] = useState(DEFAULT_STATE);
 
   const set = useCallback((key, val) => {
-    setS((prev) => ({ ...prev, [key]: val }));
+    setS((p) => ({ ...p, [key]: val }));
   }, []);
 
   const setTarget = useCallback((idx, field, val) => {
-    setS((prev) => {
-      const targets = prev.targets.map((t, i) =>
-        i === idx ? { ...t, [field]: val } : t
-      );
-      return { ...prev, targets };
-    });
+    setS((p) => ({
+      ...p,
+      targets: p.targets.map((t, i) => (i === idx ? { ...t, [field]: val } : t)),
+    }));
   }, []);
 
   const addTarget = () => {
-    if (s.targets.length >= 4) return;
-    setS((prev) => ({
-      ...prev,
-      targets: [...prev.targets, { price: "", size: 100, type: "%" }],
-    }));
+    if (s.targets.length >= 5) return;
+    setS((p) => ({ ...p, targets: [...p.targets, { price: "", pct: "", type: "M" }] }));
   };
 
   const removeTarget = (idx) => {
-    setS((prev) => ({
-      ...prev,
-      targets: prev.targets.filter((_, i) => i !== idx),
-    }));
+    setS((p) => ({ ...p, targets: p.targets.filter((_, i) => i !== idx) }));
   };
 
-  const results = s.targets.map((t) => calcTarget(s, t));
+  const result = useMemo(() => compute(s), [s]);
+
+  const directionLabel = result.ready ? result.direction.toUpperCase() : null;
 
   return (
     <div className="app">
-      <header className="app-header">
-        <div className="header-top">
-          <span className="app-logo">⬡</span>
-          <h1>TradeCalc</h1>
-        </div>
-        <Pill
-          options={[
-            { label: "Long ▲", value: "long" },
-            { label: "Short ▼", value: "short" },
-          ]}
-          value={s.etype}
-          onChange={(v) => set("etype", v)}
-        />
-      </header>
-
-      <section className="input-section">
-        <div className="section-label">Account</div>
-        <div className="input-row">
-          <NumInput label="Balance" prefix="$" value={s.account} onChange={(v) => set("account", v)} />
-          <div className="num-input-wrap">
-            <label>Risk %</label>
-            <div className="risk-pills">
-              {[0.5, 1, 1.5, 2].map((r) => (
-                <button
-                  key={r}
-                  className={`risk-btn ${s.risk === r ? "active" : ""}`}
-                  onClick={() => set("risk", r)}
-                  type="button"
-                >
-                  {r}%
-                </button>
+      <div className="card">
+        <div className="step-label">Step 1</div>
+        <div className="step-title">ACCOUNT &amp; RISK</div>
+        <div className="row-2">
+          <Field label="Account ($)">
+            <NumberInput
+              value={s.account}
+              onChange={(v) => set("account", v)}
+              placeholder="0"
+            />
+          </Field>
+          <Field label="Risk %">
+            <select
+              className="select-input"
+              value={s.risk}
+              onChange={(e) => set("risk", parseFloat(e.target.value))}
+            >
+              {RISK_OPTIONS.map((r) => (
+                <option key={r} value={r}>{r}%</option>
               ))}
-            </div>
-          </div>
+            </select>
+          </Field>
         </div>
-      </section>
+      </div>
 
-      <section className="input-section">
-        <div className="section-label">Trade Setup</div>
-        <div className="input-row">
-          <NumInput label="Entry" prefix="$" value={s.entry} onChange={(v) => set("entry", v)} />
-          <NumInput label="Stop Loss" prefix="$" value={s.sl} onChange={(v) => set("sl", v)} />
+      <div className="card">
+        <div className="step-label">Step 2</div>
+        <div className="step-title">TRADE SETUP</div>
+        <div className="row-3">
+          <Field label="Entry price">
+            <NumberInput value={s.entry} onChange={(v) => set("entry", v)} placeholder="0.00" />
+          </Field>
+          <Field label="Stop loss">
+            <NumberInput value={s.sl} onChange={(v) => set("sl", v)} placeholder="0.00" />
+          </Field>
+          <Field label="Entry">
+            <MLToggle value={s.entryType} onChange={(v) => set("entryType", v)} />
+          </Field>
         </div>
-        <div className="input-row">
-          <NumInput label="Actual Position $" prefix="$" value={s.posAct} onChange={(v) => set("posAct", v)} />
-        </div>
-      </section>
+      </div>
 
-      <section className="input-section">
-        <div className="section-label">Fees</div>
-        <div className="input-row">
-          <NumInput label="Maker Rate" value={s.mrate * 100} suffix="%" onChange={(v) => set("mrate", parseFloat(v) / 100 || 0)} />
-          <NumInput label="Taker Rate" value={s.lrate * 100} suffix="%" onChange={(v) => set("lrate", parseFloat(v) / 100 || 0)} />
-        </div>
-      </section>
-
-      <section className="targets-section">
-        <div className="section-label">Targets</div>
-        {s.targets.map((tgt, idx) => (
-          <TargetSection
-            key={idx}
-            idx={idx}
-            tgt={tgt}
-            onChange={setTarget}
-            onRemove={removeTarget}
-            result={results[idx]}
-            entry={s.entry}
-            sl={s.sl}
-            etype={s.etype}
+      <div className="card">
+        <div className="step-label">Step 3</div>
+        <div className="step-title">TARGETS</div>
+        {s.targets.map((t, i) => (
+          <TargetBlock
+            key={i}
+            idx={i}
+            target={t}
+            removable={s.targets.length > 1}
+            onChange={(field, val) => setTarget(i, field, val)}
+            onRemove={() => removeTarget(i)}
+            actData={result.act?.tdata?.[i]}
+            calcData={result.calc?.tdata?.[i]}
           />
         ))}
-        {s.targets.length < 4 && (
-          <button className="add-target-btn" onClick={addTarget} type="button">
-            + Add Target
+        {s.targets.length < 5 && (
+          <button className="add-btn" type="button" onClick={addTarget}>
+            + Add target
           </button>
         )}
-      </section>
+      </div>
+
+      <div className="card card-step4">
+        <div className="step-label">Step 4</div>
+        <div className="step-title-lg">Actual position (shares)</div>
+        <NumberInput
+          value={s.posActShares}
+          onChange={(v) => set("posActShares", v)}
+          placeholder="0"
+        />
+        <div className="hint">Dial in after targets — compare with calculated below</div>
+      </div>
+
+      <div className="card">
+        <div className="compare-head">
+          <span className="step-title">COMPARISON</span>
+          {directionLabel && (
+            <span className={`badge badge-${result.direction}`}>{directionLabel}</span>
+          )}
+        </div>
+        <table className="compare-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th><span className="col-pill">Actual</span></th>
+              <th><span className="col-pill">Calculated</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="rr-row">
+              <th>R:R</th>
+              <td colSpan={2}>
+                {result.rr != null ? `1 : ${result.rr.toFixed(2)}` : "—"}
+              </td>
+            </tr>
+            <CompareRow label="Risk $" act={fmtMoney(result.act?.riskDollar)} calc={fmtMoney(result.calc?.riskDollar)} />
+            <CompareRow label="Risk %" act={fmtPct(result.act?.riskPct)} calc={fmtPct(result.calc?.riskPct)} />
+            <CompareRow label="Entry fee" act={fmtMoney(result.act?.entryFee)} calc={fmtMoney(result.calc?.entryFee)} />
+            <CompareRow label="Exit fees" act={fmtMoney(result.act?.totalExitFees)} calc={fmtMoney(result.calc?.totalExitFees)} />
+            <CompareRow label="Break even" act={fmtPrice(result.act?.breakEven)} calc={fmtPrice(result.calc?.breakEven)} />
+            <CompareRow label="Potential profit" act={fmtMoney(result.act?.potentialProfit)} calc={fmtMoney(result.calc?.potentialProfit)} group />
+            <CompareRow label="Expected profit" act={fmtMoney(result.act?.expectedProfit)} calc={fmtMoney(result.calc?.expectedProfit)} highlight />
+            <CompareRow label="Profit %" act={fmtPct(result.act?.profitPct)} calc={fmtPct(result.calc?.profitPct)} />
+            <CompareRow label="Position value" act={fmtMoney(result.act?.positionValue)} calc={fmtMoney(result.calc?.positionValue)} group />
+            <CompareRow
+              label="Shares"
+              act={result.act?.shares != null ? fmtInt(result.act.shares) : "—"}
+              calc={result.calc?.shares != null ? fmtInt(result.calc.shares) : "—"}
+            />
+          </tbody>
+        </table>
+      </div>
+
+      <div className="card">
+        <div className="step-title">SETTINGS</div>
+        <div className="settings-row">
+          <div className="settings-label">Market<br />rate</div>
+          <NumberInput
+            value={s.marketRate}
+            onChange={(v) => set("marketRate", parseFloat(v) || 0)}
+            placeholder="0.0002"
+            step="0.00001"
+          />
+        </div>
+        <div className="settings-row">
+          <div className="settings-label">Limit<br />rate</div>
+          <NumberInput
+            value={s.limitRate}
+            onChange={(v) => set("limitRate", parseFloat(v) || 0)}
+            placeholder="0.00015"
+            step="0.00001"
+          />
+        </div>
+      </div>
     </div>
   );
 }
