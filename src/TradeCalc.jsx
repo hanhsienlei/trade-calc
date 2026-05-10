@@ -111,7 +111,7 @@ function compute(state) {
     const beOffset = (entryFee + totalExitFees) / shares;
     const breakEven = direction === "short" ? E - beOffset : E + beOffset;
     const potentialProfit = t1Diff != null ? shares * t1Diff : null;
-    const profitPct = positionValue > 0 ? expectedProfit / positionValue : null;
+    const profitPct = positionValue > 0 ? expectedProfit / account : null;
 
     const rr = potentialProfit != null && riskDollar > 0 ? potentialProfit / riskDollar : null;
 
