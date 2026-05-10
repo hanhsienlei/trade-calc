@@ -427,6 +427,24 @@ input[type=number] {
   padding: 12px 14px;
 }
 
+.rate-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.rate-input .num-input {
+  padding-right: 32px;
+}
+
+.rate-suffix {
+  position: absolute;
+  right: 14px;
+  color: var(--muted);
+  font-size: 16px;
+  pointer-events: none;
+}
+
 /* scrollbar */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
