@@ -448,6 +448,20 @@ export default function TradeCalc() {
           </tbody>
         </table>
       </div>
+
+      <div className="card card-step4">
+        <div className="step-label">Step 4</div>
+        <div className="step-title-lg">Actual position (shares)</div>
+        <NumberInput
+          value={s.posActShares}
+          onChange={(v) => set("posActShares", v)}
+          placeholder="0"
+        />
+        <div className="hint">
+          Dial in after targets — compare with calculated below
+        </div>
+      </div>
+
       <div className="card">
         <div className="step-label">Step 2</div>
         <div className="step-title">TRADE SETUP</div>
@@ -495,19 +509,6 @@ export default function TradeCalc() {
             + Add target
           </button>
         )}
-      </div>
-
-      <div className="card card-step4">
-        <div className="step-label">Step 4</div>
-        <div className="step-title-lg">Actual position (shares)</div>
-        <NumberInput
-          value={s.posActShares}
-          onChange={(v) => set("posActShares", v)}
-          placeholder="0"
-        />
-        <div className="hint">
-          Dial in after targets — compare with calculated below
-        </div>
       </div>
 
       <div className="card">
