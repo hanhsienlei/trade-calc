@@ -401,6 +401,15 @@ input[type=number] {
 }
 
 /* ── Settings ── */
+.account-row {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
 .settings-row {
   display: grid;
   grid-template-columns: 80px 1fr;

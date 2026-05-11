@@ -362,33 +362,6 @@ export default function TradeCalc() {
   return (
     <div className="app">
       <div className="card">
-        <div className="step-label">Step 1</div>
-        <div className="step-title">ACCOUNT &amp; RISK</div>
-        <div className="row-2">
-          <Field label="Account ($)">
-            <NumberInput
-              value={s.account}
-              onChange={(v) => set("account", v)}
-              placeholder="0"
-            />
-          </Field>
-          <Field label="Risk %">
-            <select
-              className="select-input"
-              value={s.risk}
-              onChange={(e) => set("risk", parseFloat(e.target.value))}
-            >
-              {RISK_OPTIONS.map((r) => (
-                <option key={r} value={r}>
-                  {r}%
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-      </div>
-
-      <div className="card">
         <div className="step-label">Step 2</div>
         <div className="step-title">TRADE SETUP</div>
         <div className="row-3">
@@ -540,6 +513,28 @@ export default function TradeCalc() {
 
       <div className="card">
         <div className="step-title">SETTINGS</div>
+        <div className="account-row">
+          <Field label="Account ($)">
+            <NumberInput
+              value={s.account}
+              onChange={(v) => set("account", v)}
+              placeholder="0"
+            />
+          </Field>
+          <Field label="Risk %">
+            <select
+              className="select-input"
+              value={s.risk}
+              onChange={(e) => set("risk", parseFloat(e.target.value))}
+            >
+              {RISK_OPTIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}%
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
         <div className="settings-row">
           <div className="settings-label">
             Market
