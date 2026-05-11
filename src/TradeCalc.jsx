@@ -362,68 +362,6 @@ export default function TradeCalc() {
   return (
     <div className="app">
       <div className="card">
-        <div className="step-label">Step 2</div>
-        <div className="step-title">TRADE SETUP</div>
-        <div className="row-3">
-          <Field label="Entry price">
-            <NumberInput
-              value={s.entry}
-              onChange={(v) => set("entry", v)}
-              placeholder="0.00"
-            />
-          </Field>
-          <Field label="Stop loss">
-            <NumberInput
-              value={s.sl}
-              onChange={(v) => set("sl", v)}
-              placeholder="0.00"
-            />
-          </Field>
-          <Field label="Entry">
-            <MLToggle
-              value={s.entryType}
-              onChange={(v) => set("entryType", v)}
-            />
-          </Field>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="step-label">Step 3</div>
-        <div className="step-title">TARGETS</div>
-        {s.targets.map((t, i) => (
-          <TargetBlock
-            key={i}
-            idx={i}
-            target={t}
-            removable={s.targets.length > 1}
-            onChange={(field, val) => setTarget(i, field, val)}
-            onRemove={() => removeTarget(i)}
-            actData={result.act?.tdata?.[i]}
-            calcData={result.calc?.tdata?.[i]}
-          />
-        ))}
-        {s.targets.length < 5 && (
-          <button className="add-btn" type="button" onClick={addTarget}>
-            + Add target
-          </button>
-        )}
-      </div>
-
-      <div className="card card-step4">
-        <div className="step-label">Step 4</div>
-        <div className="step-title-lg">Actual position (shares)</div>
-        <NumberInput
-          value={s.posActShares}
-          onChange={(v) => set("posActShares", v)}
-          placeholder="0"
-        />
-        <div className="hint">
-          Dial in after targets — compare with calculated below
-        </div>
-      </div>
-
-      <div className="card">
         <div className="compare-head">
           <span className="step-title">COMPARISON</span>
           {directionLabel && (
@@ -509,6 +447,67 @@ export default function TradeCalc() {
             />
           </tbody>
         </table>
+      </div>
+      <div className="card">
+        <div className="step-label">Step 2</div>
+        <div className="step-title">TRADE SETUP</div>
+        <div className="row-3">
+          <Field label="Entry price">
+            <NumberInput
+              value={s.entry}
+              onChange={(v) => set("entry", v)}
+              placeholder="0.00"
+            />
+          </Field>
+          <Field label="Stop loss">
+            <NumberInput
+              value={s.sl}
+              onChange={(v) => set("sl", v)}
+              placeholder="0.00"
+            />
+          </Field>
+          <Field label="Entry">
+            <MLToggle
+              value={s.entryType}
+              onChange={(v) => set("entryType", v)}
+            />
+          </Field>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="step-label">Step 3</div>
+        <div className="step-title">TARGETS</div>
+        {s.targets.map((t, i) => (
+          <TargetBlock
+            key={i}
+            idx={i}
+            target={t}
+            removable={s.targets.length > 1}
+            onChange={(field, val) => setTarget(i, field, val)}
+            onRemove={() => removeTarget(i)}
+            actData={result.act?.tdata?.[i]}
+            calcData={result.calc?.tdata?.[i]}
+          />
+        ))}
+        {s.targets.length < 5 && (
+          <button className="add-btn" type="button" onClick={addTarget}>
+            + Add target
+          </button>
+        )}
+      </div>
+
+      <div className="card card-step4">
+        <div className="step-label">Step 4</div>
+        <div className="step-title-lg">Actual position (shares)</div>
+        <NumberInput
+          value={s.posActShares}
+          onChange={(v) => set("posActShares", v)}
+          placeholder="0"
+        />
+        <div className="hint">
+          Dial in after targets — compare with calculated below
+        </div>
       </div>
 
       <div className="card">
