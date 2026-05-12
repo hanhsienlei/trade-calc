@@ -491,16 +491,12 @@ export default function TradeCalc() {
       </div>
 
       <div className="card card-step4">
-        <div className="step-label">Step 4</div>
-        <div className="step-title-lg">Actual position (shares)</div>
+        <div className="step-title-lg">ACTUAL POSITION</div>
         <NumberInput
           value={s.posActShares}
           onChange={(v) => set("posActShares", v)}
           placeholder="0"
         />
-        <div className="hint">
-          Dial in after targets — compare with calculated below
-        </div>
       </div>
 
       <div className="card">
@@ -513,7 +509,7 @@ export default function TradeCalc() {
           )}
         </div>
 
-        <div className="row-3">
+        <div className="target-grid">
           <Field label="Entry price">
             <NumberInput
               value={s.entry}
@@ -528,7 +524,7 @@ export default function TradeCalc() {
               placeholder="0.00"
             />
           </Field>
-          <Field label="Entry">
+          <Field label="Type">
             <MLToggle
               value={s.entryType}
               onChange={(v) => set("entryType", v)}
@@ -538,7 +534,6 @@ export default function TradeCalc() {
       </div>
 
       <div className="card">
-        <div className="step-label">Step 3</div>
         <div className="step-title">TARGETS</div>
         {(() => {
           const total = s.targets.reduce(
@@ -631,10 +626,10 @@ export default function TradeCalc() {
             <span className="rate-suffix">%</span>
           </div>
         </div>
-        <button type="button" className="reset-btn" onClick={resetAll}>
-          Reset all fields
-        </button>
       </div>
+      <button type="button" className="reset-btn" onClick={resetAll}>
+        Reset all fields
+      </button>
     </div>
   );
 }
