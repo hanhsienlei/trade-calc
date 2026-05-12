@@ -463,8 +463,15 @@ export default function TradeCalc() {
       </div>
 
       <div className="card">
-        <div className="step-label">Step 2</div>
-        <div className="step-title">TRADE SETUP</div>
+        <div className="compare-head">
+          <span className="step-title">TRADE SETUP</span>
+          {directionLabel && (
+            <span className={`badge badge-${result.direction}`}>
+              {directionLabel}
+            </span>
+          )}
+        </div>
+
         <div className="row-3">
           <Field label="Entry price">
             <NumberInput
