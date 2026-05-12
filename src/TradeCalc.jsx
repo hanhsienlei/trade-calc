@@ -359,6 +359,24 @@ export default function TradeCalc() {
       <div className="card">
         <div className="step-label">Step 3</div>
         <div className="step-title">TARGETS</div>
+        {(() => {
+          const total = s.targets.reduce((a, t) => a + (n(t.pct) || 0), 0);
+          const over = total > 100 + 1e-9;
+          const remaining = 100 - total;
+          return (
+            <div className={`pct-total ${over ? "over" : ""}`}>
+              <span>Total allocated</span>
+              <span className="pct-total-val">
+                {total.toFixed(total % 1 ? 2 : 0)}%
+                {over
+                  ? ` — over by ${(-remaining).toFixed(remaining % 1 ? 2 : 0)}%`
+                  : remaining > 0
+                  ? ` — ${remaining.toFixed(remaining % 1 ? 2 : 0)}% left`
+                  : ""}
+              </span>
+            </div>
+          );
+        })()}
         {s.targets.map((t, i) => (
           <TargetBlock
             key={i}
