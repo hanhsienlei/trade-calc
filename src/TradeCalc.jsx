@@ -19,11 +19,27 @@ const DEFAULT_STATE = {
   limitRate: 0.015,
 };
 
+function clampTargetPcts(targets) {
+  let used = 0;
+  return targets.map((t) => {
+    const num = parseFloat(t.pct);
+    if (!isFinite(num) || num <= 0) return t;
+    const allowed = Math.max(0, 100 - used);
+    const clamped = Math.min(num, allowed);
+    used += clamped;
+    return clamped !== num ? { ...t, pct: String(clamped) } : t;
+  });
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_STATE;
-    return { ...DEFAULT_STATE, ...JSON.parse(raw) };
+    const merged = { ...DEFAULT_STATE, ...JSON.parse(raw) };
+    if (Array.isArray(merged.targets)) {
+      merged.targets = clampTargetPcts(merged.targets);
+    }
+    return merged;
   } catch {
     return DEFAULT_STATE;
   }
@@ -320,12 +336,27 @@ export default function TradeCalc() {
   }, []);
 
   const setTarget = useCallback((idx, field, val) => {
-    setS((p) => ({
-      ...p,
-      targets: p.targets.map((t, i) =>
-        i === idx ? { ...t, [field]: val } : t,
-      ),
-    }));
+    setS((p) => {
+      let nextVal = val;
+      if (field === "pct" && val !== "" && val != null) {
+        const num = parseFloat(val);
+        if (isFinite(num)) {
+          const others = p.targets.reduce(
+            (a, t, i) => a + (i === idx ? 0 : parseFloat(t.pct) || 0),
+            0,
+          );
+          const allowed = Math.max(0, 100 - others);
+          if (num > allowed) nextVal = String(allowed);
+          else if (num < 0) nextVal = "0";
+        }
+      }
+      return {
+        ...p,
+        targets: p.targets.map((t, i) =>
+          i === idx ? { ...t, [field]: nextVal } : t,
+        ),
+      };
+    });
   }, []);
 
   const addTarget = () => {
@@ -499,6 +530,22 @@ export default function TradeCalc() {
       <div className="card">
         <div className="step-label">Step 3</div>
         <div className="step-title">TARGETS</div>
+        {(() => {
+          const total = s.targets.reduce(
+            (a, t) => a + (parseFloat(t.pct) || 0),
+            0,
+          );
+          const remaining = Math.max(0, 100 - total);
+          const fmt = (v) => v.toFixed(v % 1 ? 2 : 0);
+          return (
+            <div className="pct-total">
+              <span>Total allocated</span>
+              <span className="pct-total-val">
+                {fmt(total)}%{remaining > 0 && ` — ${fmt(remaining)}% left`}
+              </span>
+            </div>
+          );
+        })()}
         {s.targets.map((t, i) => (
           <TargetBlock
             key={i}
