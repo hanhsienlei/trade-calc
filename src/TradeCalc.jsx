@@ -541,7 +541,7 @@ export default function TradeCalc() {
             <div className="pct-total">
               <span>Total allocated</span>
               <span className="pct-total-val">
-                {fmt(total)}%{remaining > 0 && ` — ${fmt(remaining)}% left`}
+                {fmt(total)}%{remaining > 0 && `  /  ${fmt(remaining)}% left`}
               </span>
             </div>
           );
