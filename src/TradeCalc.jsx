@@ -129,18 +129,23 @@ function compute(state) {
       const TP = n(t.price);
       const pctRaw = n(t.pct);
       const pct = isFinite(pctRaw) ? pctRaw / 100 : NaN;
+      const priceDiff =
+        isFinite(TP) && TP > 0
+          ? direction === "short"
+            ? E - TP
+            : TP - E
+          : null;
       if (!isFinite(TP) || TP <= 0 || !isFinite(pct) || pct <= 0 || !shares) {
         return {
           sliceShares: null,
           exitFee: null,
           gross: null,
           net: null,
-          priceDiff: null,
+          priceDiff,
         };
       }
       const sliceShares = shares * pct;
       const exitFee = sliceShares * TP * rateOf(t.type);
-      const priceDiff = direction === "short" ? E - TP : TP - E;
       const gross = sliceShares * priceDiff;
       const net = gross - exitFee;
       return { sliceShares, exitFee, gross, net, priceDiff };
@@ -160,10 +165,15 @@ function compute(state) {
     const breakEven = direction === "short" ? E - beOffset : E + beOffset;
     const potentialProfit = t1Diff != null ? shares * t1Diff : null;
     const profitPct = positionValue > 0 ? expectedProfit / account : null;
-    const rr =
-      direction === "long"
-        ? Math.min(...tdata.map((x) => x.priceDiff || 0)) / (E - S)
-        : Math.max(...tdata.map((x) => x.priceDiff || 0)) / (S - E);
+    const diffs = tdata
+      .map((x) => x.priceDiff)
+      .filter((d) => d != null && isFinite(d));
+    const worstDiff = diffs.length
+      ? direction === "long"
+        ? Math.min(...diffs)
+        : Math.max(...diffs)
+      : null;
+    const rr = worstDiff != null && slDiff > 0 ? worstDiff / slDiff : null;
 
     return {
       shares,
