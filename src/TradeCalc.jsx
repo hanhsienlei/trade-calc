@@ -403,9 +403,7 @@ export default function TradeCalc() {
 
   return (
     <div className="app">
-      <div className="card">
-        <TradingViewWidget />
-      </div>
+      <TradingViewWidget />
       <div className="card">
         <div className="compare-head">
           <span className="step-title">COMPARISON</span>
