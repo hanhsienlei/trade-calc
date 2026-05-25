@@ -1,6 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import "./TradeCalc.css";
-import TradingViewWidget from "./TradingViewWidget";
 
 const RISK_OPTIONS = [0.5, 1, 2, 3, 5, 10];
 const STORAGE_KEY = "tradecalc.state.v1";
@@ -403,9 +402,6 @@ export default function TradeCalc() {
 
   return (
     <div className="app">
-      <div className="card">
-        <TradingViewWidget />
-      </div>
       <div className="card">
         <div className="compare-head">
           <span className="step-title">COMPARISON</span>
